@@ -1,0 +1,188 @@
+# Number of replicas
+replicaCount: 1
+
+image:
+  repository: registry
+  # Use registry:3 for the latest distribution v3, or registry:2 for v2 stable
+  tag: "3"
+  pullPolicy: IfNotPresent
+
+# Pull secrets for the image (e.g., for private registries)
+imagePullSecrets: []
+
+# Override the name of the chart
+nameOverride: ""
+
+# Override the full name
+fullnameOverride: ""
+
+# Service account configuration
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod annotations
+podAnnotations: {}
+
+# Additional pod labels
+podLabels: {}
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 1000
+
+# Container security context
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 5000
+  annotations: {}
+
+# Ingress configuration — enables external cluster access
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    # Use nginx as the ingress controller
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    # Disable buffering for streaming
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    # Enable SSL redirect if TLS is configured
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: registry.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: registry-tls
+  #    hosts:
+  #      - registry.example.com
+
+# Update strategy for the Deployment
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Liveness probe
+livenessProbe:
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Readiness probe
+readinessProbe:
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Persistence (storage for registry data)
+persistence:
+  enabled: true
+  # If set, use this existing PVC instead of creating a new one
+  existingClaim: ""
+  # Storage class for the PVC. Set to "-" to disable dynamic provisioning
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  annotations: {}
+
+# Secrets configuration
+secrets:
+  # htpasswd authentication string (plain text). Leave empty for no auth.
+  # Example: $ htpasswd -Bbn admin mypassword
+  htpasswd: ""
+  #   admin:$2y$05$xxxxxxxxxxxxxxxxxxxxxx
+
+# Extra environment variables
+extraEnv: []
+# - name: REGISTRY_STORAGE_DELETE_ENABLED
+#   value: "true"
+
+extraEnvFrom: []
+
+# Extra volumes
+extraVolumes: []
+
+# Extra volume mounts
+extraVolumeMounts: []
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+  # customMetrics: []
+
+# Registry configuration (config.yml contents)
+# See: https://github.com/distribution/distribution/blob/main/docs/configuration.md
+config:
+  version: 0.1
+  log:
+    level: info
+    formatter: text
+    fields:
+      service: registry
+  storage:
+    cache:
+      blobdescriptor: inmemory
+    filesystem:
+      rootdirectory: /var/lib/registry
+    delete:
+      enabled: false
+  http:
+    addr: :5000
+    headers:
+      X-Content-Type-Options: [nosniff]
+    debug:
+      addr: :5001
+      prometheus:
+        enabled: false
+        path: /metrics
+  health:
+    storagedriver:
+      enabled: true
+      interval: 10s
+      threshold: 3

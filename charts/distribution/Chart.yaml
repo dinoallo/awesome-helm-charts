@@ -1,0 +1,24 @@
+apiVersion: v2
+name: distribution
+description: A Helm chart for the Docker Registry (distribution/distribution) on Kubernetes
+type: application
+version: 0.1.0
+appVersion: "3.1.1"
+home: https://github.com/distribution/distribution
+icon: https://raw.githubusercontent.com/distribution/distribution/main/distribution.png
+sources:
+  - https://github.com/distribution/distribution
+keywords:
+  - registry
+  - docker
+  - distribution
+  - container-registry
+maintainers:
+  - name: awesome-helm-charts
+    url: https://github.com/awesome-helm-charts
+annotations:
+  artifacthub.io/changes: |
+    - "Initial release of distribution Helm chart"
+  artifacthub.io/images: |
+    - name: registry
+      image: registry:3.1.1
