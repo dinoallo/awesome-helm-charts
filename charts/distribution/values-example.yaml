@@ -1,0 +1,142 @@
+# =============================================================================
+# distribution 部署范例 — Copy 并修改后使用
+# =============================================================================
+# 使用方式:
+#   helm install my-registry . -f values-example.yaml
+#
+# 必改项:
+#   1. ingress.hosts[0].host       ← 你的域名
+#   2. ingress.tls[0].secretName   ← TLS 证书 Secret（先创建或使用 cert-manager）
+#   3. secrets.htpasswd            ← 用 htpasswd 命令生成
+
+# --- 基础 ---
+replicaCount: 1
+
+image:
+  repository: registry
+  tag: "3"
+  pullPolicy: IfNotPresent
+
+# --- 存储 ---
+persistence:
+  enabled: true
+  size: 50Gi
+  # storageClass: fast-ssd       # 按需取消注释
+  # 注意: 默认 ReadWriteOnce 不支持跨节点共享，多副本需要 RWX 存储类
+
+# --- 域名 & Ingress（外部访问） ---
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"          # 推送大镜像不限制
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off" # 流式传输
+    # cert-manager 自动证书（按需取消注释）
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: registry.mycompany.com   # ← 改成你的域名
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: registry-tls       # ← TLS Secret 名称
+      hosts:
+        - registry.mycompany.com     # ← 改成你的域名
+
+# --- 基本认证（推荐） ---
+# 生成命令: htpasswd -Bbn admin mypassword
+# 警告: 使用基本认证时必须同时配置 TLS，否则密码明文传输
+secrets:
+  htpasswd: ""  # ← 把上面命令的输出粘贴到这里
+  # 例如: "admin:$2y$05$abcdefghijklmnopqrstuv"
+
+# --- 资源 ---
+resources:
+  limits:
+    cpu: 1
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+# --- 安全 ---
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+# --- 更新策略 ---
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+
+# --- 健康检查（TCP 探测，不受认证影响） ---
+livenessProbe:
+  tcpSocket:
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  tcpSocket:
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# --- 开启镜像删除 ---
+extraEnv:
+  - name: REGISTRY_STORAGE_DELETE_ENABLED
+    value: "true"
+
+# --- 自动伸缩（选填） ---
+# 注意: replicaCount > 1 需要 RWX 存储类或 S3/GCS 后端
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# --- Registry 配置 ---
+config:
+  version: 0.1
+  log:
+    level: info
+    formatter: text
+    fields:
+      service: registry
+  storage:
+    cache:
+      blobdescriptor: inmemory
+    filesystem:
+      rootdirectory: /var/lib/registry
+    delete:
+      enabled: true
+  http:
+    addr: :5000
+    headers:
+      X-Content-Type-Options: [nosniff]
+    debug:
+      addr: 127.0.0.1:5001
+      prometheus:
+        enabled: false
+        path: /metrics
+  health:
+    storagedriver:
+      enabled: true
+      interval: 10s
+      threshold: 3
