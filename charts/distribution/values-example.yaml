@@ -6,11 +6,11 @@
 #
 # 必改项:
 #   1. ingress.hosts[0].host       ← 你的域名
-#   2. ingress.tls[0].secretName   ← TLS 证书 Secret
+#   2. ingress.tls[0].secretName   ← TLS 证书 Secret（先创建或使用 cert-manager）
 #   3. secrets.htpasswd            ← 用 htpasswd 命令生成
 
 # --- 基础 ---
-replicaCount: 2
+replicaCount: 1
 
 image:
   repository: registry
@@ -22,6 +22,7 @@ persistence:
   enabled: true
   size: 50Gi
   # storageClass: fast-ssd       # 按需取消注释
+  # 注意: 默认 ReadWriteOnce 不支持跨节点共享，多副本需要 RWX 存储类
 
 # --- 域名 & Ingress（外部访问） ---
 ingress:
@@ -44,6 +45,7 @@ ingress:
 
 # --- 基本认证（推荐） ---
 # 生成命令: htpasswd -Bbn admin mypassword
+# 警告: 使用基本认证时必须同时配置 TLS，否则密码明文传输
 secrets:
   htpasswd: ""  # ← 把上面命令的输出粘贴到这里
   # 例如: "admin:$2y$05$abcdefghijklmnopqrstuv"
@@ -78,10 +80,9 @@ updateStrategy:
     maxUnavailable: 0
     maxSurge: 1
 
-# --- 健康检查 ---
+# --- 健康检查（TCP 探测，不受认证影响） ---
 livenessProbe:
-  httpGet:
-    path: /
+  tcpSocket:
     port: http
   initialDelaySeconds: 30
   periodSeconds: 10
@@ -89,8 +90,7 @@ livenessProbe:
   failureThreshold: 3
 
 readinessProbe:
-  httpGet:
-    path: /
+  tcpSocket:
     port: http
   initialDelaySeconds: 5
   periodSeconds: 10
@@ -103,10 +103,11 @@ extraEnv:
     value: "true"
 
 # --- 自动伸缩（选填） ---
+# 注意: replicaCount > 1 需要 RWX 存储类或 S3/GCS 后端
 autoscaling:
   enabled: false
-  minReplicas: 2
-  maxReplicas: 10
+  minReplicas: 1
+  maxReplicas: 5
   targetCPUUtilizationPercentage: 80
   targetMemoryUtilizationPercentage: 80
 
@@ -130,7 +131,7 @@ config:
     headers:
       X-Content-Type-Options: [nosniff]
     debug:
-      addr: :5001
+      addr: 127.0.0.1:5001
       prometheus:
         enabled: false
         path: /metrics

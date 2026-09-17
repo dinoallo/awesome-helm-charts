@@ -21,9 +21,9 @@ helm install my-registry ./charts/distribution \
   --set ingress.hosts[0].host=registry.mycompany.com
 ```
 
-### With TLS
+### With TLS and basic auth (recommended)
 
-Create a TLS secret first, then install:
+Create a TLS secret first, then install with authentication:
 
 ```bash
 # Create TLS secret (or use cert-manager)
@@ -31,26 +31,17 @@ kubectl create secret tls registry-tls \
   --cert=tls.crt \
   --key=tls.key
 
-helm install my-registry ./charts/distribution \
-  --set ingress.hosts[0].host=registry.mycompany.com \
-  --set ingress.tls[0].secretName=registry-tls \
-  --set ingress.tls[0].hosts[0]=registry.mycompany.com
-```
-
-### With basic auth
-
-Generate an htpasswd entry and pass it to Helm:
-
-```bash
-# Generate htpasswd string
+# Generate htpasswd entry
 HTPASSWD=$(htpasswd -Bbn admin mypassword)
 
 helm install my-registry ./charts/distribution \
   --set ingress.hosts[0].host=registry.mycompany.com \
+  --set ingress.tls[0].secretName=registry-tls \
+  --set ingress.tls[0].hosts[0]=registry.mycompany.com \
   --set "secrets.htpasswd=${HTPASSWD}"
 ```
 
-The registry will prompt for username/password on every request.
+> ⚠️ **Important:** When using basic auth, TLS must be configured to avoid sending credentials in plaintext.
 
 ### With cert-manager (automatic TLS)
 
@@ -59,7 +50,8 @@ helm install my-registry ./charts/distribution \
   --set ingress.hosts[0].host=registry.mycompany.com \
   --set ingress.annotations."cert-manager\.io/cluster-issuer"=letsencrypt-prod \
   --set ingress.tls[0].secretName=registry-tls \
-  --set ingress.tls[0].hosts[0]=registry.mycompany.com
+  --set ingress.tls[0].hosts[0]=registry.mycompany.com \
+  --set "secrets.htpasswd=$(htpasswd -Bbn admin mypassword)"
 ```
 
 ### With custom storage class
@@ -104,7 +96,7 @@ helm install my-registry ./charts/distribution \
 
 ## Configuration
 
-See [values.yaml](values.yaml) for the full reference.
+See [values.yaml](values.yaml) for the full reference, or use [values-example.yaml](values-example.yaml) as a starting point.
 
 ### Ingress parameters
 
@@ -124,7 +116,7 @@ See [values.yaml](values.yaml) for the full reference.
 |-----------|---------|-------------|
 | `persistence.enabled` | `true` | Enable persistent storage |
 | `persistence.size` | `10Gi` | PVC size |
-| `persistence.storageClass` | `""` | Storage class (empty = default) |
+| `persistence.storageClass` | `""` | Storage class (empty = default; set to `"-"` to disable) |
 | `persistence.accessModes` | `[ReadWriteOnce]` | Access modes |
 | `persistence.existingClaim` | `""` | Use existing PVC name |
 
@@ -154,7 +146,7 @@ config:
     headers:
       X-Content-Type-Options: [nosniff]
     debug:
-      addr: :5001
+      addr: 127.0.0.1:5001
       prometheus:
         enabled: false
         path: /metrics
@@ -165,14 +157,21 @@ config:
       threshold: 3
 ```
 
+### Basic auth
+
+Set `secrets.htpasswd` to an htpasswd string (e.g., output of `htpasswd -Bbn admin mypassword`). The chart automatically configures `REGISTRY_AUTH` environment variables to enable authentication. TLS is required when using basic auth.
+
 ## Verifying the installation
 
 ```bash
 # Check pods
 kubectl get pods -l app.kubernetes.io/name=distribution
 
-# Test the registry API
+# Test the registry API (without auth)
 curl -i http://<ingress-host>/v2/
+
+# Test with auth
+curl -i -u admin:mypassword https://<ingress-host>/v2/
 
 # Should return: 200 {"repositories":[]}
 ```
