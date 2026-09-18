@@ -1,0 +1,125 @@
+# =============================================================================
+# Keycloak 部署范例 — Copy 并修改后使用
+# =============================================================================
+# 使用方式:
+#   helm install my-keycloak . -f values-example.yaml
+#
+# 必改项:
+#   1. ingress.hosts[0].host       ← 你的域名
+#   2. ingress.tls[0].secretName   ← TLS 证书 Secret（先创建或使用 cert-manager）
+#   3. database.*                  ← 数据库配置（生产环境必须使用外部数据库）
+#   4. auth.adminPassword          ← 管理员密码
+
+# --- 基础 ---
+replicaCount: 2
+
+image:
+  # 可改用任意镜像地址，例如:
+  #   registry.cn-hangzhou.aliyuncs.com/keycloak/keycloak:26.1   (阿里云镜像)
+  #   docker.io/keycloak/keycloak:26.1                           (Docker Hub)
+  #   your-registry.example.com/keycloak/keycloak:26.1           (私有仓库)
+  repository: quay.io/keycloak/keycloak
+  tag: "26.1"
+  pullPolicy: IfNotPresent
+
+# 私有仓库拉取凭证
+# imagePullSecrets:
+#   - name: my-registry-cred
+
+# --- 管理员账号 ---
+auth:
+  adminUser: admin
+  # 生产环境建议使用已有 Secret:
+  # existingAdminPasswordSecret: keycloak-admin-password
+  adminPassword: "ChangeMe123!"   # ← 改成强密码
+
+# --- 数据库（生产环境必须配置） ---
+database:
+  # 支持: dev-file, postgres, mysql, mariadb, mssql, oracle
+  vendor: postgres
+  hostname: my-postgresql.default.svc.cluster.local
+  port: 5432
+  database: keycloak
+  username: keycloak
+  # 生产环境建议使用已有 Secret:
+  # existingPasswordSecret: keycloak-db-password
+  password: "keycloak-db-pass"  # ← 改成你的数据库密码
+  # tlsEnabled: true
+
+# --- 域名 & Ingress（外部访问） ---
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "8m"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+    # cert-manager 自动证书（按需取消注释）
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: keycloak.mycompany.com   # ← 改成你的域名
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: keycloak-tls       # ← TLS Secret 名称
+      hosts:
+        - keycloak.mycompany.com     # ← 改成你的域名
+
+# --- 主机名配置（影响重定向和 token 中的 issuer） ---
+hostname:
+  strict: false
+  url: https://keycloak.mycompany.com
+  # adminUrl: https://keycloak-admin.mycompany.com
+
+# --- 资源 ---
+resources:
+  limits:
+    cpu: 2
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+# --- 安全 ---
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+# --- 更新策略 ---
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+
+# --- 自动伸缩 ---
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# --- 额外环境变量（更多 Keycloak 配置选项） ---
+extraEnv:
+  # 代理模式: edge (最常用，适用于 nginx ingress)
+  # - name: KC_PROXY
+  #   value: "edge"
+  # 缓存: 多副本时启用 Kubernetes 缓存栈
+  - name: KC_CACHE_STACK
+    value: "kubernetes"
+  # 日志级别
+  - name: KC_LOG_LEVEL
+    value: "info"
+  # 开启 metrics 端点
+  - name: KC_METRICS_ENABLED
+    value: "true"
