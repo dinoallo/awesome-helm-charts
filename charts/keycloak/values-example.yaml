@@ -8,7 +8,7 @@
 #   1. ingress.hosts[0].host       ← 你的域名
 #   2. ingress.tls[0].secretName   ← TLS 证书 Secret（先创建或使用 cert-manager）
 #   3. database.*                  ← 数据库配置（生产环境必须使用外部数据库）
-#   4. auth.adminPassword          ← 管理员密码
+#   4. auth.adminPassword          ← 管理员密码（或使用 existingAdminPasswordSecret）
 
 # --- 基础 ---
 replicaCount: 2
@@ -33,6 +33,12 @@ auth:
   # existingAdminPasswordSecret: keycloak-admin-password
   adminPassword: "ChangeMe123!"   # ← 改成强密码
 
+# --- RBAC（多副本 + Kubernetes 缓存栈时需要） ---
+# 当 replicaCount > 1 且 extraEnv 中启用 KC_CACHE_STACK=kubernetes 时，
+# Keycloak 需要 ServiceAccount 具备 pods 资源的 get/list/watch 权限。
+# rbac:
+#   create: true
+
 # --- 数据库（生产环境必须配置） ---
 database:
   # 支持: dev-file, postgres, mysql, mariadb, mssql, oracle
@@ -44,7 +50,10 @@ database:
   # 生产环境建议使用已有 Secret:
   # existingPasswordSecret: keycloak-db-password
   password: "keycloak-db-pass"  # ← 改成你的数据库密码
-  # tlsEnabled: true
+  # 数据库 TLS 请使用 extraEnv 配置，例如:
+  # extraEnv:
+  #   - name: KC_DB_URL_PROPERTIES
+  #     value: "?sslmode=require"
 
 # --- 域名 & Ingress（外部访问） ---
 ingress:
@@ -111,10 +120,10 @@ autoscaling:
 
 # --- 额外环境变量（更多 Keycloak 配置选项） ---
 extraEnv:
-  # 代理模式: edge (最常用，适用于 nginx ingress)
-  # - name: KC_PROXY
-  #   value: "edge"
-  # 缓存: 多副本时启用 Kubernetes 缓存栈
+  # 代理模式: xforwarded (最常用，适用于 nginx ingress)
+  # - name: KC_PROXY_HEADERS
+  #   value: "xforwarded"
+  # 缓存: 多副本时启用 Kubernetes 缓存栈（需同时设置 rbac.create: true）
   - name: KC_CACHE_STACK
     value: "kubernetes"
   # 日志级别

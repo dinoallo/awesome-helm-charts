@@ -16,17 +16,15 @@
   echo http://$SERVICE_IP:{{ .Values.service.port }}
 {{- end }}
 
-{{- if and .Values.auth.adminUser .Values.auth.adminPassword }}
-2. Login with:
-  Username: {{ .Values.auth.adminUser }}
-  Password: {{ .Values.auth.adminPassword }}
-{{- else if .Values.auth.adminUser }}
-2. The admin password was auto-generated. Retrieve it with:
-  kubectl get secret --namespace {{ .Release.Namespace }} {{ include "keycloak.fullname" . }}-admin-password -o jsonpath="{.data.password}" | base64 -d
+2. Login with username: {{ .Values.auth.adminUser }}
+{{- if .Values.auth.existingAdminPasswordSecret }}
+   Admin password is stored in the Secret "{{ .Values.auth.existingAdminPasswordSecret }}" (key: admin-password).
+   Retrieve it with:
+     kubectl get secret --namespace {{ .Release.Namespace }} {{ .Values.auth.existingAdminPasswordSecret }} -o jsonpath="{.data.admin-password}" | base64 -d
+{{- else if .Values.auth.adminPassword }}
+   Admin password was configured during install. To avoid exposing credentials in logs, consider switching to auth.existingAdminPasswordSecret.
 {{- else }}
-2. Keycloak started without bootstrapping admin credentials.
-   You may need to check the logs for auto-generated credentials:
-   kubectl logs --namespace {{ .Release.Namespace }} deployment/{{ include "keycloak.fullname" . }}
+   Admin password is not configured. Set auth.adminPassword or auth.existingAdminPasswordSecret.
 {{- end }}
 
 {{- if ne .Values.database.vendor "dev-file" }}

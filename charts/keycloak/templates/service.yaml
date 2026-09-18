@@ -15,9 +15,11 @@ spec:
       targetPort: {{ .Values.service.portName }}
       protocol: TCP
       name: {{ .Values.service.portName }}
+    {{- if .Values.service.managementPortEnabled }}
     - port: {{ .Values.service.managementPort }}
       targetPort: {{ .Values.service.managementPortName }}
       protocol: TCP
       name: {{ .Values.service.managementPortName }}
+    {{- end }}
   selector:
     {{- include "keycloak.selectorLabels" . | nindent 4 }}

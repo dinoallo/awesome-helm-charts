@@ -42,13 +42,17 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - {{ if eq .Values.database.vendor "dev-file" }}start-dev{{ else }}start{{ end }}
           ports:
             - name: {{ .Values.service.portName }}
               containerPort: {{ .Values.service.port }}
               protocol: TCP
+            {{- if .Values.service.managementPortEnabled }}
             - name: {{ .Values.service.managementPortName }}
               containerPort: {{ .Values.service.managementPort }}
               protocol: TCP
+            {{- end }}
           env:
             # Admin credentials
             {{- if and .Values.auth.adminUser .Values.auth.existingAdminUserSecret }}
@@ -59,7 +63,7 @@ spec:
                   key: admin-user
             {{- else if .Values.auth.adminUser }}
             - name: KC_BOOTSTRAP_ADMIN_USERNAME
-              value: {{ .Values.auth.adminUser }}
+              value: {{ .Values.auth.adminUser | quote }}
             {{- end }}
             {{- if .Values.auth.existingAdminPasswordSecret }}
             - name: KC_BOOTSTRAP_ADMIN_PASSWORD
@@ -69,23 +73,23 @@ spec:
                   key: admin-password
             {{- else if .Values.auth.adminPassword }}
             - name: KC_BOOTSTRAP_ADMIN_PASSWORD
-              value: {{ .Values.auth.adminPassword }}
+              value: {{ .Values.auth.adminPassword | quote }}
             {{- end }}
 
             # Database configuration
             - name: KC_DB
-              value: {{ .Values.database.vendor }}
+              value: {{ .Values.database.vendor | quote }}
             {{- if .Values.database.hostname }}
             - name: KC_DB_URL_HOST
-              value: {{ .Values.database.hostname }}
+              value: {{ .Values.database.hostname | quote }}
             - name: KC_DB_URL_PORT
               value: {{ .Values.database.port | quote }}
             - name: KC_DB_URL_DATABASE
-              value: {{ .Values.database.database }}
+              value: {{ .Values.database.database | quote }}
             {{- end }}
             {{- if .Values.database.username }}
             - name: KC_DB_USERNAME
-              value: {{ .Values.database.username }}
+              value: {{ .Values.database.username | quote }}
             {{- end }}
             {{- if .Values.database.existingPasswordSecret }}
             - name: KC_DB_PASSWORD
@@ -95,25 +99,21 @@ spec:
                   key: password
             {{- else if .Values.database.password }}
             - name: KC_DB_PASSWORD
-              value: {{ .Values.database.password }}
+              value: {{ .Values.database.password | quote }}
             {{- end }}
             {{- if .Values.database.schema }}
             - name: KC_DB_SCHEMA
-              value: {{ .Values.database.schema }}
-            {{- end }}
-            {{- if .Values.database.tlsEnabled }}
-            - name: KC_DB_POOL_USE_TLS
-              value: "true"
+              value: {{ .Values.database.schema | quote }}
             {{- end }}
 
             # Hostname configuration
             {{- if .Values.hostname.url }}
-            - name: KC_HOSTNAME_URL
-              value: {{ .Values.hostname.url }}
+            - name: KC_HOSTNAME
+              value: {{ .Values.hostname.url | quote }}
             {{- end }}
             {{- if .Values.hostname.adminUrl }}
             - name: KC_HOSTNAME_ADMIN_URL
-              value: {{ .Values.hostname.adminUrl }}
+              value: {{ .Values.hostname.adminUrl | quote }}
             {{- end }}
             {{- if .Values.hostname.strict }}
             - name: KC_HOSTNAME_STRICT
@@ -126,9 +126,9 @@ spec:
             # Listen on all interfaces for health checks
             - name: KC_HTTP_ENABLED
               value: "true"
-            # Proxy settings (edge mode by default for ingress behind reverse proxy)
-            - name: KC_PROXY
-              value: "edge"
+            # Proxy headers settings (edge mode by default for ingress behind reverse proxy)
+            - name: KC_PROXY_HEADERS
+              value: "xforwarded"
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

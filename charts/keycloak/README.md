@@ -9,7 +9,7 @@ A Helm chart for deploying [Keycloak](https://www.keycloak.org/) on Kubernetes.
 - ✅ Customizable image registry — use any Keycloak-compatible image (quay.io, Docker Hub, private/aliyun mirrors, etc.)
 - ✅ Ingress for external cluster access (default enabled)
 - ✅ TLS and cert-manager support
-- ✅ Admin user bootstrapping with random password generation support
+- ✅ Admin user bootstrapping
 - ✅ Production-grade database configuration (PostgreSQL, MySQL, MariaDB, MSSQL, Oracle)
 - ✅ Built-in H2 database for development/testing
 - ✅ Health checks (startup, liveness, readiness via Keycloak's `/health` endpoints)
@@ -21,16 +21,13 @@ A Helm chart for deploying [Keycloak](https://www.keycloak.org/) on Kubernetes.
 ## Quick Start
 
 ```bash
-# Add the repository
-helm repo add awesome-helm-charts https://example.com/charts
-
 # Install Keycloak (development mode, built-in H2 database)
-helm install my-keycloak awesome-helm-charts/keycloak \
+helm install my-keycloak ./charts/keycloak \
   --set ingress.hosts[0].host=keycloak.example.com \
   --set auth.adminPassword=myadminpassword
 
 # Production: use an external database
-helm install my-keycloak awesome-helm-charts/keycloak -f values-example.yaml
+helm install my-keycloak ./charts/keycloak -f values-example.yaml
 ```
 
 ## Configuration
@@ -80,7 +77,6 @@ database:
   database: keycloak
   username: keycloak
   password: "your-password"
-  # tlsEnabled: true
   # schema: public
 ```
 
@@ -94,6 +90,14 @@ database:
   database: keycloak
   username: keycloak
   existingPasswordSecret: keycloak-db-password  # key: password
+```
+
+For vendor-specific database TLS settings, use `extraEnv`:
+
+```yaml
+extraEnv:
+  - name: KC_DB_URL_PROPERTIES
+    value: "?sslmode=require"
 ```
 
 ### Admin Credentials
@@ -116,6 +120,8 @@ hostname:
   adminUrl: https://keycloak-admin.mycompany.com
 ```
 
+This sets the `KC_HOSTNAME` environment variable, which Keycloak uses to generate redirect URIs and token issuers.
+
 ### Full Configuration Reference
 
 | Parameter | Description | Default |
@@ -130,6 +136,7 @@ hostname:
 | `serviceAccount.create` | Create service account | `true` |
 | `serviceAccount.annotations` | Service account annotations | `{}` |
 | `serviceAccount.name` | Service account name | `""` |
+| `rbac.create` | Create RBAC for cache stack | `false` |
 | `podAnnotations` | Pod annotations | `{}` |
 | `podLabels` | Additional pod labels | `{}` |
 | `podSecurityContext` | Pod security context | `{fsGroup: 1000}` |
@@ -137,6 +144,7 @@ hostname:
 | `service.type` | Service type | `ClusterIP` |
 | `service.port` | HTTP port | `8080` |
 | `service.managementPort` | Management/health port | `9000` |
+| `service.managementPortEnabled` | Expose management port on Service | `true` |
 | `service.annotations` | Service annotations | `{}` |
 | `ingress.enabled` | Enable ingress | `true` |
 | `ingress.className` | Ingress class name | `nginx` |
@@ -158,14 +166,13 @@ hostname:
 | `database.username` | Database username | `keycloak` |
 | `database.password` | Database password | `""` |
 | `database.existingPasswordSecret` | Existing secret for DB password | `""` |
-| `database.tlsEnabled` | Enable TLS for DB connection | `false` |
 | `database.schema` | Database schema | `""` |
 | `auth.adminUser` | Admin username | `admin` |
 | `auth.adminPassword` | Admin password | `""` |
 | `auth.existingAdminPasswordSecret` | Existing secret for admin password | `""` |
 | `auth.existingAdminUserSecret` | Existing secret for admin user | `""` |
 | `hostname.strict` | Strict hostname checking | `false` |
-| `hostname.url` | Frontend URL | `""` |
+| `hostname.url` | Frontend URL (sets KC_HOSTNAME) | `""` |
 | `hostname.adminUrl` | Admin URL | `""` |
 | `extraEnv` | Extra environment variables | `[]` |
 | `extraEnvFrom` | Extra envFrom sources | `[]` |
@@ -183,11 +190,11 @@ hostname:
 ## Production Considerations
 
 1. **Database**: Always use a production-grade external database. The built-in H2 (`dev-file`) is for development only.
-2. **Replicas**: For high availability, set `replicaCount: 2` or more, and enable `KC_CACHE_STACK: kubernetes`.
+2. **Replicas**: For high availability, set `replicaCount: 2` or more, enable `KC_CACHE_STACK: kubernetes`, and set `rbac.create: true`.
 3. **TLS**: Always enable TLS for production. Use cert-manager with `ingress.tls` or terminate TLS at the ingress.
 4. **Resources**: Adjust CPU/memory limits based on your expected workload. Keycloak benefits from sufficient heap memory.
 5. **Backup**: Regularly back up your database. Keycloak stores all configuration and user data in the database.
-6. **Proxy**: The chart sets `KC_PROXY=edge` by default for ingress-based deployments. Adjust as needed for your proxy setup.
+6. **Proxy headers**: The chart sets `KC_PROXY_HEADERS=xforwarded` by default for ingress-based deployments. Adjust as needed for your proxy setup.
 
 ## Uninstall
 
