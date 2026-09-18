@@ -1,0 +1,218 @@
+# Number of replicas
+replicaCount: 1
+
+image:
+  # -- Image repository. Supports any Keycloak-compatible image (quay.io, Docker Hub, private registries, etc.)
+  repository: quay.io/keycloak/keycloak
+  # -- Image tag. Use "latest" for the bleeding edge, or a specific version like "26.1", "25.0", "24.0", etc.
+  tag: "26.1"
+  pullPolicy: IfNotPresent
+
+# Pull secrets for the image (e.g., for private registries)
+imagePullSecrets: []
+
+# Override the name of the chart
+nameOverride: ""
+
+# Override the full name
+fullnameOverride: ""
+
+# Service account configuration
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# RBAC resources for features that need extra permissions (e.g., JGroups Kubernetes cache)
+rbac:
+  # -- Create ClusterRole and ClusterRoleBinding for the service account.
+  # Required when using KC_CACHE_STACK=kubernetes with multiple replicas.
+  create: false
+
+# Pod annotations
+podAnnotations: {}
+
+# Additional pod labels
+podLabels: {}
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 1000
+
+# Container security context
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8080
+  portName: http
+  # -- Keycloak also exposes a separate port for management/health checks
+  managementPort: 9000
+  managementPortName: management
+  # -- Expose the management port on the same Service.
+  # Set to false to keep management endpoints internal-only (recommended for NodePort/LoadBalancer).
+  managementPortEnabled: true
+  annotations: {}
+
+# Ingress configuration — enables external cluster access
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    # Use nginx as the ingress controller
+    nginx.ingress.kubernetes.io/proxy-body-size: "8m"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+  hosts:
+    - host: keycloak.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: keycloak-tls
+  #    hosts:
+  #      - keycloak.example.com
+
+# Update strategy for the Deployment
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 2
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+# Liveness probe — uses Keycloak's health endpoint
+livenessProbe:
+  httpGet:
+    path: /health
+    port: management
+    scheme: HTTP
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 5
+
+# Readiness probe — uses Keycloak's readiness endpoint
+readinessProbe:
+  httpGet:
+    path: /health/ready
+    port: management
+    scheme: HTTP
+  initialDelaySeconds: 30
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 5
+
+# Startup probe — helps with slow first-start scenarios
+startupProbe:
+  httpGet:
+    path: /health/ready
+    port: management
+    scheme: HTTP
+  initialDelaySeconds: 30
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 20
+
+# Persistence for Keycloak data (only used when built-in H2 database is configured)
+# **Important**: For production, configure an external database via extraEnv instead.
+persistence:
+  enabled: false
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  annotations: {}
+
+# Database configuration
+# For production, you MUST configure a production-grade database (PostgreSQL, MySQL, MariaDB, etc.)
+# through the database fields or extraEnv. See values-example.yaml for details.
+database:
+  # -- Vendor: "dev-file" (built-in H2), "postgres", "mysql", "mariadb", "mssql", "oracle"
+  vendor: dev-file
+  # The following are shortcuts for common database configuration.
+  # For advanced setups, use extraEnv directly.
+  hostname: ""
+  port: 5432
+  database: keycloak
+  username: keycloak
+  password: ""
+  # -- Existing secret name that contains KC_DB_PASSWORD (key: password)
+  existingPasswordSecret: ""
+  # -- Schema to use (optional)
+  schema: ""
+
+# Admin credentials
+auth:
+  # -- Admin username.
+  adminUser: admin
+  # -- Admin password. Provide either this or existingAdminPasswordSecret.
+  adminPassword: ""
+  # -- Existing secret name that contains admin password (key: admin-password)
+  existingAdminPasswordSecret: ""
+  # -- Existing secret name that contains admin user (key: admin-user)
+  existingAdminUserSecret: ""
+
+# Hostname configuration
+hostname:
+  # -- Strict hostname checking. Leave false to allow non-matching Host headers.
+  strict: false
+  # -- Frontend URL that Keycloak advertises in auth flows (e.g., https://keycloak.example.com).
+  # Sets KC_HOSTNAME.
+  url: ""
+  # -- Admin URL (defaults to KC_HOSTNAME if empty)
+  adminUrl: ""
+
+# Extra environment variables — the primary way to configure Keycloak.
+# See: https://www.keycloak.org/server/all-config
+extraEnv: []
+# - name: KC_PROXY_HEADERS
+#   value: "xforwarded"
+# - name: KC_CACHE_STACK
+#   value: "kubernetes"
+# - name: KC_LOG_LEVEL
+#   value: "info"
+# - name: KC_DB_URL_PROPERTIES
+#   value: "?sslmode=require"
+
+extraEnvFrom: []
+
+# Extra volumes
+extraVolumes: []
+
+# Extra volume mounts
+extraVolumeMounts: []
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80

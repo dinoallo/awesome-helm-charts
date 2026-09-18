@@ -1,0 +1,28 @@
+apiVersion: v2
+name: keycloak
+description: A Helm chart for Keycloak on Kubernetes
+type: application
+version: 0.1.0
+appVersion: "26.1"
+home: https://www.keycloak.org/
+icon: https://www.keycloak.org/resources/images/keycloak_logo_480x108.png
+sources:
+  - https://github.com/keycloak/keycloak
+keywords:
+  - keycloak
+  - iam
+  - identity
+  - sso
+  - authentication
+  - authorization
+  - oidc
+  - saml
+maintainers:
+  - name: awesome-helm-charts
+    url: https://github.com/awesome-helm-charts
+annotations:
+  artifacthub.io/changes: |
+    - "Initial release of Keycloak Helm chart"
+  artifacthub.io/images: |
+    - name: keycloak
+      image: quay.io/keycloak/keycloak:26.1
